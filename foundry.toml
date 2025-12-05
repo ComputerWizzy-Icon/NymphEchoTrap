@@ -1,0 +1,11 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+
+# Add these remappings
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "drosera-contracts/=lib/drosera-contracts/src/",
+    "forge-std/=lib/forge-std/src/"
+]
