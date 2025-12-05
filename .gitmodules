@@ -4,3 +4,6 @@
 [submodule "lib/openzeppelin-contracts"]
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts.git
+[submodule "lib/drosera-contracts"]
+	path = lib/drosera-contracts
+	url = https://github.com/ComputerWizzy-Icon/NymphEchoTrap.git

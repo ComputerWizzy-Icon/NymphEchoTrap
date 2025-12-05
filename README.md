@@ -1,164 +1,159 @@
+```markdown
 # NymphEchoTrap
 
-A trust-minimized monitoring trap for Drosera smart contracts, enabling anomaly detection and automated alerts through a responder contract. Designed to work with a whitelist of allowed operators.
+**NymphEchoTrap** is a Solidity-based monitoring and alert system designed specifically for the **Drosera Network**. It tracks anomalies in Drosera smart contracts, including code changes, balance fluctuations, and block inconsistencies, and triggers alerts via the `NymphEchoResponder`. Access is controlled through the `WhitelistOperator` for secure monitoring.
 
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Features](#features)
-3. [Folder Structure](#folder-structure)
-4. [Installation](#installation)
-5. [Environment Variables](#environment-variables)
-6. [Deployment](#deployment)
-7. [Usage](#usage)
-8. [Testing](#testing)
-9. [Security Considerations](#security-considerations)
-10. [License](#license)
-
----
-
-## Overview
-
-`NymphEchoTrap` is a Solidity project built with Foundry that monitors a target contract for:
-
-* Code hash changes
-* Balance changes
-* Block inconsistencies
-
-When an anomaly is detected, it triggers the `NymphEchoResponder` contract to log or alert the relevant parties. Only whitelisted operators can execute the checks.
+This project is part of the Drosera ecosystem, helping maintain the integrity and security of Drosera nodes, traps, and contract interactions.
 
 ---
 
 ## Features
 
-* Modular design with `WhitelistOperator` for access control
-* Anomaly detection via `check()` function
-* Automated alerting using `NymphEchoResponder`
-* Configurable target and watch addresses
-* Fully tested with Foundry
+- Monitors Drosera contracts for:
+  - Code changes (`codehash` differences)
+  - Balance changes
+  - Block inconsistencies
+- Sends real-time alerts using `NymphEchoResponder`
+- Controlled access via `WhitelistOperator`
+- Compatible with Ethereum and EVM-based networks supporting Drosera
+- Fully modular, upgradeable, and ready for integration with Drosera tools
 
 ---
 
-## Folder Structure
+## Repository Structure
 
 ```
-nymph-echo-trap/
-├── src/contracts/
+
+.
+├── src/contracts/              # Solidity contracts for Drosera monitoring
 │   ├── NymphEchoTrap.sol       # Main trap contract
-│   ├── NymphEchoResponder.sol  # Handles alerts/responses
-│   ├── WhitelistOperator.sol   # Access control
-│   └── Trap.sol                # Optional helper trap
-├── test/
-│   └── NymphEchoTrap.t.sol     # Test cases for trap contract
-├── script/
-│   └── DeployTrap.s.sol        # Deployment script
-├── .env                        # Environment variables (PRIVATE_KEY, ETH_RPC_URL)
-├── foundry.toml                # Foundry configuration
-└── README.md                   # This file
-```
+│   ├── NymphEchoResponder.sol  # Handles alert notifications
+│   ├── Trap.sol
+│   └── WhitelistOperator.sol
+├── test/                       # Forge tests
+│   └── NymphEchoTrap.t.sol
+├── script/                     # Deployment scripts
+│   └── DeployTrap.s.sol
+├── lib/                        # Submodules for Drosera dependencies
+│   ├── drosera-contracts/      # Drosera core contracts as submodule
+│   ├── forge-std/
+│   └── openzeppelin-contracts/
+├── broadcast/                  # Deployment broadcast logs
+├── .env                        # Environment variables (not committed)
+├── foundry.toml                # Foundry project config
+└── README.md
+
+````
 
 ---
 
-## Installation
+## Security Notes
 
-1. Install [Foundry](https://book.getfoundry.sh/getting-started/installation):
+- Never commit your private keys or RPC URLs to GitHub.
+- `.env` is ignored by `.gitignore` to prevent leaks.
+- Use a separate wallet with minimal funds for Drosera test deployments.
+- Submodules like `drosera-contracts` are tracked separately for security and modularity.
 
-   ```bash
-   curl -L https://foundry.paradigm.xyz | bash
-   foundryup
-   ```
+---
 
-2. Clone this repository:
+## Setup
 
-   ```bash
-   git clone https://github.com/<your-username>/nymph-echo-trap.git
-   cd nymph-echo-trap
-   ```
+1. Clone the repo recursively (to include Drosera submodules):
+```bash
+git clone --recursive https://github.com/ComputerWizzy-Icon/NymphEchoTrap.git
+cd NymphEchoTrap
+````
+
+2. Install Foundry if not already installed:
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+```
 
 3. Install dependencies:
 
-   ```bash
-   forge install
-   ```
+```bash
+forge install
+```
 
----
+4. Create a `.env` file with your private environment variables:
 
-## Environment Variables
-
-Create a `.env` file in the root folder:
-
-```env
+```
 PRIVATE_KEY=<your-wallet-private-key>
 ETH_RPC_URL=<your-ethereum-node-url>
 ```
-
-**Important:** Never commit `.env` to GitHub. Add it to `.gitignore`.
 
 ---
 
 ## Deployment
 
-Deploy contracts using Foundry scripts:
+Deploy NymphEchoTrap to monitor Drosera contracts:
+
+### Simulated Deployment
 
 ```bash
-source .env
+forge script script/DeployTrap.s.sol
+```
+
+### On-chain Deployment
+
+```bash
 forge script script/DeployTrap.s.sol --rpc-url $ETH_RPC_URL --broadcast --private-key $PRIVATE_KEY
 ```
 
-Logs will show deployed addresses:
+After deployment, logs will show the addresses for:
 
-```
-Whitelist deployed at: 0x...
-Responder deployed at: 0x...
-Trap deployed at: 0x...
-```
+* `WhitelistOperator`
+* `NymphEchoResponder`
+* `NymphEchoTrap`
+
+These contracts form the core Drosera monitoring system.
 
 ---
 
 ## Usage
 
-1. Add allowed operators via `WhitelistOperator`:
+1. Whitelist operators using `WhitelistOperator`.
+2. Monitor a Drosera contract by calling:
 
-   ```solidity
-   whitelist.setOperator(operatorAddress, true);
-   ```
+```solidity
+trap.check(oldCodehash, newCodehash, oldBal, newBal, lastCheckedBlock);
+```
 
-2. Run anomaly checks using whitelisted accounts:
-
-   ```solidity
-   trap.check(oldCodehash, newCodehash, oldBalance, newBalance, lastCheckedBlock);
-   ```
-
-3. The `NymphEchoResponder` will handle the response or alert.
+3. Alerts are automatically handled by `NymphEchoResponder`.
 
 ---
 
 ## Testing
 
-Run tests with Foundry:
+Run Forge tests to ensure Drosera monitoring works:
 
 ```bash
 forge test
 ```
 
-Example output:
+---
 
-```
-Ran 1 test suite: 1 tests passed; 0 failed
+## Submodules
+
+`drosera-contracts` is included as a submodule for Drosera core functionality:
+
+```bash
+git submodule update --init --recursive
 ```
 
 ---
 
-## Security Considerations
+## Contributing
 
-* **Private Key Management:** Never store private keys in GitHub or in scripts. Use `.env`.
-* **RPC URLs:** Use secure endpoints and avoid exposing them publicly.
-* **Whitelist:** Only trusted operators should be whitelisted to avoid unauthorized checks.
+* Open issues or PRs for bugs or enhancements.
+* Do not commit private keys, RPC URLs, or sensitive data.
 
 ---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT License
 
----
+```
