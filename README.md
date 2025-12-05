@@ -1,4 +1,3 @@
-```markdown
 # NymphEchoTrap
 
 **NymphEchoTrap** is a Solidity-based monitoring and alert system designed specifically for the **Drosera Network**. It tracks anomalies in Drosera smart contracts, including code changes, balance fluctuations, and block inconsistencies, and triggers alerts via the `NymphEchoResponder`. Access is controlled through the `WhitelistOperator` for secure monitoring.
