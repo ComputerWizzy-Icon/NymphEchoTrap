@@ -6,15 +6,25 @@ drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 [traps]
 
 [traps.nymph_echo]
+# Must point to the compiled Drosera-compatible trap artifact
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
-response_contract = "0xd4c80c46d8F1e1bdd3Fc548Dd218B343F5C2F0D3"
+
+# Responder contract you already deployed
+response_contract = "0xa1fB3f289d392BF720A9D2798ECFB750837C7b2b"
+
+# MUST match the function signature EXACTLY
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256,string)"
-cooldown_period_blocks = 30
+
+# Drosera recommended values for anomaly comparison
+cooldown_period_blocks = 20
 min_number_of_operators = 1
 max_number_of_operators = 3
-block_sample_size = 20
+block_sample_size = 2
+
+# Hidden trap (only you can run it)
 private_trap = true
 
+# Do NOT use on-chain whitelist; Drosera handles it here
 whitelist = [
-    "0x14e424df0c35686cf58fc7d05860689041d300f6",
+    "0x14e424df0c35686cf58fc7d05860689041d300f6"
 ]

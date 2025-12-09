@@ -1,158 +1,155 @@
+
 # NymphEchoTrap
 
-**NymphEchoTrap** is a Solidity-based monitoring and alert system designed specifically for the **Drosera Network**. It tracks anomalies in Drosera smart contracts, including code changes, balance fluctuations, and block inconsistencies, and triggers alerts via the `NymphEchoResponder`. Access is controlled through the `WhitelistOperator` for secure monitoring.
+**Status:** Drosera-compatible stateless trap
+**Author:** Sekani chief JayCool BFF
+**Version:** 1.0
 
-This project is part of the Drosera ecosystem, helping maintain the integrity and security of Drosera nodes, traps, and contract interactions.
+---
+
+## Overview
+
+`NymphEchoTrap` is a **stateless Drosera trap** designed to detect anomalies in smart contract deployments, balances, and block number sequences. The trap adheres strictly to the Drosera protocol, exposing only the required interfaces `collect()` and `shouldRespond()` for relay-driven detection.
+
+This trap does **not** store mutable state or call responders directly, ensuring deterministic execution across all Drosera operators. It is fully compatible with private traps and Drosera relays.
 
 ---
 
 ## Features
 
-- Monitors Drosera contracts for:
-  - Code changes (`codehash` differences)
-  - Balance changes
-  - Block inconsistencies
-- Sends real-time alerts using `NymphEchoResponder`
-- Controlled access via `WhitelistOperator`
-- Compatible with Ethereum and EVM-based networks supporting Drosera
-- Fully modular, upgradeable, and ready for integration with Drosera tools
+* Stateless and deterministic, fully compatible with Drosera.
+* Detects three types of anomalies:
+
+  1. **Code changes** (`codehash` mismatch)
+  2. **Balance changes** (ETH balance deviation)
+  3. **Block anomalies** (new sample block ≤ previous sample block)
+* Generates payload data for responders without directly invoking them.
+* Handles empty or missing data safely to prevent reverts.
 
 ---
 
-## Repository Structure
+## Contract Architecture
 
-```
+### 1. NymphEchoTrap.sol
 
-.
-├── src/contracts/              # Solidity contracts for Drosera monitoring
-│   ├── NymphEchoTrap.sol       # Main trap contract
-│   ├── NymphEchoResponder.sol  # Handles alert notifications
-│   ├── Trap.sol
-│   └── WhitelistOperator.sol
-├── test/                       # Forge tests
-│   └── NymphEchoTrap.t.sol
-├── script/                     # Deployment scripts
-│   └── DeployTrap.s.sol
-├── lib/                        # Submodules for Drosera dependencies
-│   ├── drosera-contracts/      # Drosera core contracts as submodule
-│   ├── forge-std/
-│   └── openzeppelin-contracts/
-├── broadcast/                  # Deployment broadcast logs
-├── .env                        # Environment variables (not committed)
-├── foundry.toml                # Foundry project config
-└── README.md
-
-````
-
----
-
-## Security Notes
-
-- Never commit your private keys or RPC URLs to GitHub.
-- `.env` is ignored by `.gitignore` to prevent leaks.
-- Use a separate wallet with minimal funds for Drosera test deployments.
-- Submodules like `drosera-contracts` are tracked separately for security and modularity.
-
----
-
-## Setup
-
-1. Clone the repo recursively (to include Drosera submodules):
-```bash
-git clone --recursive https://github.com/ComputerWizzy-Icon/NymphEchoTrap.git
-cd NymphEchoTrap
-````
-
-2. Install Foundry if not already installed:
-
-```bash
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
-```
-
-3. Install dependencies:
-
-```bash
-forge install
-```
-
-4. Create a `.env` file with your private environment variables:
-
-```
-PRIVATE_KEY=<your-wallet-private-key>
-ETH_RPC_URL=<your-ethereum-node-url>
-```
-
----
-
-## Deployment
-
-Deploy NymphEchoTrap to monitor Drosera contracts:
-
-### Simulated Deployment
-
-```bash
-forge script script/DeployTrap.s.sol
-```
-
-### On-chain Deployment
-
-```bash
-forge script script/DeployTrap.s.sol --rpc-url $ETH_RPC_URL --broadcast --private-key $PRIVATE_KEY
-```
-
-After deployment, logs will show the addresses for:
-
-* `WhitelistOperator`
-* `NymphEchoResponder`
-* `NymphEchoTrap`
-
-These contracts form the core Drosera monitoring system.
-
----
-
-## Usage
-
-1. Whitelist operators using `WhitelistOperator`.
-2. Monitor a Drosera contract by calling:
+Implements `ITrap` interface:
 
 ```solidity
-trap.check(oldCodehash, newCodehash, oldBal, newBal, lastCheckedBlock);
+function collect() external view returns (bytes)
+function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory)
 ```
 
-3. Alerts are automatically handled by `NymphEchoResponder`.
+**`collect()`**
+
+* Captures a snapshot of the trap contract:
+
+  * Contract address (`target`)
+  * Caller (`watch`)
+  * Contract `codehash`
+  * Contract balance
+  * Current block number
+
+**`shouldRespond()`**
+
+* Stateless comparison of the last two samples: newest vs previous.
+* Returns:
+
+  * `bool` → true if any anomaly detected
+  * `bytes` → encoded payload for the responder
+
+**Helper functions:**
+
+* `_decodeSafe()` → safely decodes raw `bytes` into a `Sample` struct
+* `_reason()` → returns a human-readable string explaining the anomaly
 
 ---
 
-## Testing
+### 2. NymphEchoResponder.sol
 
-Run Forge tests to ensure Drosera monitoring works:
+A lightweight contract that emits an event when anomalies are detected.
+
+```solidity
+event EchoIncident(
+    address indexed target,
+    address indexed watchAddr,
+    bytes32 oldCodehash,
+    bytes32 newCodehash,
+    uint256 oldBalance,
+    uint256 newBalance,
+    uint256 oldBlock,
+    uint256 newBlock
+);
+
+function respondWithEchoAlert(
+    address _target,
+    address _watchAddr,
+    bytes32 _oldCodeh,
+    bytes32 _newCodeh,
+    uint256 _oldBal,
+    uint256 _newBal,
+    uint256 _oldBlock,
+    uint256 _newBlock
+) external;
+```
+
+* Designed to be called **only by the Drosera relay** after `shouldRespond()` returns `true`.
+* Does **not** perform any imperative logic; strictly emits events.
+
+---
+
+## Deployment Instructions
+
+1. Set up `.env` with your keys:
+
+```env
+ETH_RPC_URL=<your-eth-rpc>
+DROSERA_RPC_URL=<your-drosera-relay>
+PRIVATE_KEY=<your-private-key>
+
+RESPONSE_CONTRACT=<deployed responder address>
+```
+
+2. Compile and deploy using Foundry:
 
 ```bash
-forge test
+forge script script/DeployAll.s.sol:DeployAll --rpc-url $ETH_RPC_URL --broadcast
 ```
+
+3. Copy the deployed addresses into `.env` and Drosera TOML config.
 
 ---
 
-## Submodules
+## Drosera TOML Example
 
-`drosera-contracts` is included as a submodule for Drosera core functionality:
-
-```bash
-git submodule update --init --recursive
+```toml
+[traps.nymph_echo]
+path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
+response_contract = "0xa1fB3f289d392BF720A9D2798ECFB750837C7b2b"
+response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256,string)"
+cooldown_period_blocks = 20
+min_number_of_operators = 1
+max_number_of_operators = 3
+block_sample_size = 2
+private_trap = true
+whitelist = ["0x14e424df0c35686cf58fc7d05860689041d300f6"]
 ```
+
+* `block_sample_size = 2` → only compares newest vs previous sample.
+* `private_trap = true` → restricts usage to your private whitelist.
+* `whitelist` → replace with Drosera operator addresses allowed to run the trap.
 
 ---
 
-## Contributing
+## Notes
 
-* Open issues or PRs for bugs or enhancements.
-* Do not commit private keys, RPC URLs, or sensitive data.
+* **No constructor parameters**: ensures deterministic deployment.
+* **No on-chain storage**: state is derived from `bytes[] data` provided by Drosera relay.
+* **No direct calls to responder**: Drosera relay handles invocation after `shouldRespond()`.
 
 ---
 
 ## License
 
-MIT License
+MIT
 
-```
+---
