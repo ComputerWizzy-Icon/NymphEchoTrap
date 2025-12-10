@@ -1,36 +1,62 @@
-
-# NymphEchoTrap
+# **NymphEchoTrap**
 
 **Status:** Drosera-compatible stateless trap
 **Author:** Sekani chief JayCool BFF
-**Version:** 1.0
+**Version:** 1.1 (Bjorn-reviewed)
 
 ---
 
-## Overview
+## **Overview**
 
-`NymphEchoTrap` is a **stateless Drosera trap** designed to detect anomalies in smart contract deployments, balances, and block number sequences. The trap adheres strictly to the Drosera protocol, exposing only the required interfaces `collect()` and `shouldRespond()` for relay-driven detection.
+`NymphEchoTrap` is a **stateless, deterministic Drosera trap** designed to detect critical anomalies in Ethereum contracts. It monitors:
 
-This trap does **not** store mutable state or call responders directly, ensuring deterministic execution across all Drosera operators. It is fully compatible with private traps and Drosera relays.
+* **Code changes** (`codehash`)
+* **Balance shifts** (ETH balance deviations)
+* **Block regressions** (new sample block < previous block)
 
----
-
-## Features
-
-* Stateless and deterministic, fully compatible with Drosera.
-* Detects three types of anomalies:
-
-  1. **Code changes** (`codehash` mismatch)
-  2. **Balance changes** (ETH balance deviation)
-  3. **Block anomalies** (new sample block ≤ previous sample block)
-* Generates payload data for responders without directly invoking them.
-* Handles empty or missing data safely to prevent reverts.
+The trap ensures **planner-safe execution**, **ABI alignment**, and **private trap compatibility**. It separates **collection**, **detection**, and **response** responsibilities, relying on the Drosera relay for secure, consistent invocation.
 
 ---
 
-## Contract Architecture
+## **Key Improvements (Bjorn Review)**
 
-### 1. NymphEchoTrap.sol
+1. **ABI Alignment**
+
+   * Removed 9th argument (`reason string`) from trap payload to match responder’s 8-argument signature.
+   * Ensures no decode mismatches or reverts during Drosera relay execution.
+
+2. **Deterministic collect()**
+
+   * Removed `msg.sender` and `address(this)` from the snapshot.
+   * `TARGET` and `WATCH` are constants, producing consistent samples across operators.
+
+3. **Block Progression Check**
+
+   * Changed `<=` to `<` to detect **true block regressions** only.
+
+4. **Planner-Safety Guard**
+
+   * Skips execution if there are fewer than 2 samples or if samples are empty.
+
+5. **Cleaner Payload Encoding**
+
+   * Encodes exactly 8 fields (target, watch, oldCode, newCode, oldBalance, newBalance, oldBlock, newBlock).
+
+---
+
+## **Features**
+
+* Stateless, no on-chain storage.
+* Deterministic execution across all Drosera operators.
+* Private trap support with operator whitelist.
+* Generates precise payloads for responders, avoiding false positives.
+* Safe handling of empty or missing data.
+
+---
+
+## **Contract Architecture**
+
+### **1. NymphEchoTrap.sol**
 
 Implements `ITrap` interface:
 
@@ -39,34 +65,41 @@ function collect() external view returns (bytes)
 function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory)
 ```
 
-**`collect()`**
+**collect()**
 
-* Captures a snapshot of the trap contract:
+* Takes a snapshot of `TARGET` and `WATCH`:
 
-  * Contract address (`target`)
-  * Caller (`watch`)
-  * Contract `codehash`
-  * Contract balance
-  * Current block number
+```solidity
+bytes32 codeh;
+assembly { codeh := extcodehash(TARGET) }
+return abi.encode(codeh, WATCH.balance, block.number);
+```
 
-**`shouldRespond()`**
+* Fully deterministic: no `msg.sender` or `address(this)`.
 
-* Stateless comparison of the last two samples: newest vs previous.
-* Returns:
+**shouldRespond()**
 
-  * `bool` → true if any anomaly detected
-  * `bytes` → encoded payload for the responder
+* Compares newest vs previous sample: code, balance, block.
+* Returns `(true, payload)` if anomaly detected:
 
-**Helper functions:**
-
-* `_decodeSafe()` → safely decodes raw `bytes` into a `Sample` struct
-* `_reason()` → returns a human-readable string explaining the anomaly
+```solidity
+bytes memory payload = abi.encode(
+    TARGET,
+    WATCH,
+    prevCodehash,
+    curCodehash,
+    prevBalance,
+    curBalance,
+    prevBlock,
+    curBlock
+);
+```
 
 ---
 
-### 2. NymphEchoResponder.sol
+### **2. NymphEchoResponder.sol**
 
-A lightweight contract that emits an event when anomalies are detected.
+Emits an `EchoIncident` event when anomalies are detected:
 
 ```solidity
 event EchoIncident(
@@ -92,14 +125,16 @@ function respondWithEchoAlert(
 ) external;
 ```
 
-* Designed to be called **only by the Drosera relay** after `shouldRespond()` returns `true`.
-* Does **not** perform any imperative logic; strictly emits events.
+* Only emits events; **no imperative logic**.
+* ABI matches the trap payload exactly (8 arguments).
+
+**Deployed Address:** `0xBD8048d93efa26ef3f986f2fe1Eb74E2b7c5D5be`
 
 ---
 
-## Deployment Instructions
+## **Deployment Instructions**
 
-1. Set up `.env` with your keys:
+1. Setup `.env`:
 
 ```env
 ETH_RPC_URL=<your-eth-rpc>
@@ -109,23 +144,26 @@ PRIVATE_KEY=<your-private-key>
 RESPONSE_CONTRACT=<deployed responder address>
 ```
 
-2. Compile and deploy using Foundry:
+2. Compile and deploy:
 
 ```bash
-forge script script/DeployAll.s.sol:DeployAll --rpc-url $ETH_RPC_URL --broadcast
+forge script script/DeployAll.s.sol:DeployAll \
+  --rpc-url $ETH_RPC_URL \
+  --broadcast \
+  --private-key $PRIVATE_KEY
 ```
 
-3. Copy the deployed addresses into `.env` and Drosera TOML config.
+3. Record deployed addresses in `.env` and `drosera.toml`.
 
 ---
 
-## Drosera TOML Example
+## **drosera.toml Example**
 
 ```toml
 [traps.nymph_echo]
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
-response_contract = "0xa1fB3f289d392BF720A9D2798ECFB750837C7b2b"
-response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256,string)"
+response_contract = "0x311cc11b6eB48edf199aE23b73130397A50232dC"
+response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"
 cooldown_period_blocks = 20
 min_number_of_operators = 1
 max_number_of_operators = 3
@@ -134,22 +172,85 @@ private_trap = true
 whitelist = ["0x14e424df0c35686cf58fc7d05860689041d300f6"]
 ```
 
-* `block_sample_size = 2` → only compares newest vs previous sample.
-* `private_trap = true` → restricts usage to your private whitelist.
-* `whitelist` → replace with Drosera operator addresses allowed to run the trap.
+* `block_sample_size = 2` → compares newest vs previous sample only.
+* `private_trap = true` → restricts usage to your whitelist.
+* `whitelist` → list of Drosera operators allowed to execute the trap.
 
 ---
 
-## Notes
+## **Best Practices**
 
-* **No constructor parameters**: ensures deterministic deployment.
-* **No on-chain storage**: state is derived from `bytes[] data` provided by Drosera relay.
-* **No direct calls to responder**: Drosera relay handles invocation after `shouldRespond()`.
+* Always use **checksummed addresses** for `TARGET` and `WATCH`.
+* Keep **trap/responder ABI aligned** to prevent reverts.
+* Ensure **planner-safe checks** for empty or insufficient samples.
+* Update **payload fields** if the responder function changes.
 
 ---
 
-## License
+## **About**
 
-MIT
+NymphEchoTrap is a **reference Drosera trap**, implementing best practices for stateless, deterministic monitoring.
+It reflects **Bjorn’s corrections** and is suitable for secure deployment, private traps, and reproducible anomaly detection.
+
+---
+
+Perfect! I can add a **workflow diagram** using Markdown-friendly ASCII arrows so it’s fully viewable on GitHub. Here’s the updated README section with the diagram included:
+
+---
+
+## **Workflow Diagram**
+
+```text
++----------------+      collect()       +-----------------+
+|  Drosera Relay |--------------------->| NymphEchoTrap   |
+|   (scheduler)  |                      |  collect()      |
++----------------+                      +-----------------+
+                                                  |
+                                                  v
+                                      Snapshot of TARGET/WATCH:
+                                      - codehash
+                                      - balance
+                                      - block number
+                                                  |
+                                                  v
+                                       +------------------+
+                                       | shouldRespond()  |
+                                       |  Compare newest  |
+                                       |  vs previous     |
+                                       |  samples         |
+                                       +------------------+
+                                                  |
+                                    Anomaly detected? (code, balance, block)
+                                                  |
+                      +---------------------------+---------------------------+
+                      |                                                       |
+                     YES                                                      NO
+                      |                                                       |
+                      v                                                       v
+           +--------------------+                                +-------------------+
+           | Encode Payload      |                                | Return false,     |
+           | (8 fields)          |                                | empty bytes       |
+           +--------------------+                                +-------------------+
+                      |
+                      v
+           +--------------------+
+           | Drosera Relay      |
+           | Calls Responder    |
+           +--------------------+
+                      |
+                      v
+           +--------------------+
+           | NymphEchoResponder |
+           | Emits EchoIncident |
+           +--------------------+
+```
+
+**Explanation:**
+
+1. **collect()**: Takes a deterministic snapshot of the `TARGET` and `WATCH` addresses (codehash, balance, block).
+2. **shouldRespond()**: Compares newest vs previous sample; triggers only if anomaly detected.
+3. **Payload**: Encodes exactly 8 fields to match the responder signature.
+4. **Drosera Relay**: Handles the call to the responder securely.
+5. **Responder**: Emits `EchoIncident` event to log the anomaly.
 
 ---

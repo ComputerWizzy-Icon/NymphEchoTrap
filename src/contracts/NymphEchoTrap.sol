@@ -3,108 +3,72 @@ pragma solidity ^0.8.20;
 
 import {ITrap} from "drosera-contracts/interfaces/ITrap.sol";
 
+/// @notice Drosera-compatible stateless trap.
 contract NymphEchoTrap is ITrap {
+    /// @dev Replace with the real addresses you want to monitor.
+    address public constant TARGET = 0x0000000000000000000000000000000000000000;
+    address public constant WATCH = 0x0000000000000000000000000000000000000000;
+
     struct Sample {
-        address target;
-        address watch;
         bytes32 codehash;
         uint256 balance;
         uint256 blockNumber;
     }
 
-    /**
-     * ------------------------------------------------------------------
-     * collect()
-     * Drosera runner collects data from this function.
-     * ------------------------------------------------------------------
-     */
+    /// @notice Deterministic snapshot of TARGET/WATCH.
     function collect() external view override returns (bytes memory) {
-        address target = address(this);
-        address watch = msg.sender;
-
         bytes32 codeh;
         assembly {
-            codeh := extcodehash(target)
+            codeh := extcodehash(TARGET)
         }
 
-        Sample memory s = Sample({
-            target: target,
-            watch: watch,
-            codehash: codeh,
-            balance: target.balance,
-            blockNumber: block.number
-        });
+        uint256 bal = WATCH.balance;
+        uint256 blk = block.number;
 
-        return abi.encode(s);
+        return abi.encode(codeh, bal, blk);
     }
 
-    /**
-     * ------------------------------------------------------------------
-     * shouldRespond()
-     * Pure deterministic response logic.
-     * ------------------------------------------------------------------
-     */
+    /// @notice Compare newest sample vs previous sample.
     function shouldRespond(
         bytes[] calldata data
     ) external pure override returns (bool, bytes memory) {
-        if (data.length < 2) return (false, "");
+        // Must have at least two valid samples
+        if (data.length < 2 || data[0].length == 0 || data[1].length == 0) {
+            return (false, "");
+        }
 
-        Sample memory newest = _decodeSafe(data[0]);
-        Sample memory previous = _decodeSafe(data[1]);
+        // Decode: (bytes32 codehash, uint256 balance, uint256 blockNumber)
+        (bytes32 curCode, uint256 curBal, uint256 curBlk) = abi.decode(
+            data[0],
+            (bytes32, uint256, uint256)
+        );
+        (bytes32 prevCode, uint256 prevBal, uint256 prevBlk) = abi.decode(
+            data[1],
+            (bytes32, uint256, uint256)
+        );
 
-        bool codeChanged = newest.codehash != previous.codehash;
-        bool balanceChanged = newest.balance != previous.balance;
-        bool blockJump = newest.blockNumber <= previous.blockNumber;
+        bool codeChanged = (curCode != prevCode);
+        bool balanceChanged = (curBal != prevBal);
+
+        // Correct logic: detect true block regression only
+        bool blockJump = (curBlk < prevBlk);
 
         if (!(codeChanged || balanceChanged || blockJump)) {
             return (false, "");
         }
 
+        // EXACT 8-field payload to match responder + TOML
         bytes memory payload = abi.encode(
-            newest.target,
-            newest.watch,
-            previous.codehash,
-            newest.codehash,
-            previous.balance,
-            newest.balance,
-            previous.blockNumber,
-            newest.blockNumber,
-            _reason(codeChanged, balanceChanged, blockJump)
+            TARGET,
+            WATCH,
+            prevCode,
+            curCode,
+            prevBal,
+            curBal,
+            prevBlk,
+            curBlk
         );
 
         return (true, payload);
-    }
-
-    /**
-     * ------------------------------------------------------------------
-     * Helpers
-     * ------------------------------------------------------------------
-     */
-
-    function _decodeSafe(
-        bytes calldata raw
-    ) internal pure returns (Sample memory) {
-        if (raw.length == 0) {
-            return
-                Sample({
-                    target: address(0),
-                    watch: address(0),
-                    codehash: 0,
-                    balance: 0,
-                    blockNumber: 0
-                });
-        }
-        return abi.decode(raw, (Sample));
-    }
-
-    function _reason(
-        bool codeChanged,
-        bool balanceChanged,
-        bool blockJump
-    ) internal pure returns (string memory) {
-        if (codeChanged) return "codehash changed";
-        if (balanceChanged) return "balance changed";
-        if (blockJump) return "block number anomaly";
-        return "no anomaly";
     }
 }
