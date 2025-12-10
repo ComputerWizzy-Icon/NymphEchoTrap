@@ -9,10 +9,10 @@ drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 # Compiled artifact of the trap
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
 
-# Your newly deployed responder contract
-response_contract = "0x311cc11b6eB48edf199aE23b73130397A50232dC"
+# MUST be your newly deployed responder
+response_contract = "0xBD8048d93efa26ef3f986f2fe1Eb74E2b7c5D5be"
 
-# MUST match responder signature EXACTLY (8 args, NO string)
+# MUST match responder signature EXACTLY (8 args)
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"
 
 # Drosera recommended defaults
