@@ -10,7 +10,9 @@ drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
 
 # MUST be your newly deployed responder
-response_contract = "0xBD8048d93efa26ef3f986f2fe1Eb74E2b7c5D5be"
+# From your deploy logs:
+# Responder deployed at: 0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0
+response_contract = "0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0"
 
 # MUST match responder signature EXACTLY (8 args)
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"

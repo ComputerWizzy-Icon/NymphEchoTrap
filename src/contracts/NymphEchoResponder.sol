@@ -13,7 +13,7 @@ contract NymphEchoResponder {
         uint256 newBlock
     );
 
-    /// Called by the Drosera relay when trap.shouldRespond == true
+    /// @notice Called by Drosera relay
     function respondWithEchoAlert(
         address _target,
         address _watchAddr,

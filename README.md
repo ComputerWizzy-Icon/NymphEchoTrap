@@ -2,7 +2,7 @@
 
 **Status:** Drosera-compatible stateless trap
 **Author:** Sekani chief JayCool BFF
-**Version:** 1.1 (Bjorn-reviewed)
+**Version:** 1.2 (Bjorn-reviewed & corrected)
 
 ---
 
@@ -10,11 +10,16 @@
 
 `NymphEchoTrap` is a **stateless, deterministic Drosera trap** designed to detect critical anomalies in Ethereum contracts. It monitors:
 
-* **Code changes** (`codehash`)
-* **Balance shifts** (ETH balance deviations)
+* **Code changes** (`codehash` of TARGET)
+* **Balance shifts** (ETH balance deviations of TARGET)
 * **Block regressions** (new sample block < previous block)
 
-The trap ensures **planner-safe execution**, **ABI alignment**, and **private trap compatibility**. It separates **collection**, **detection**, and **response** responsibilities, relying on the Drosera relay for secure, consistent invocation.
+The trap ensures **planner-safe execution**, **ABI alignment**, and **private trap compatibility**. It separates **collection**, **detection**, and **response** responsibilities, relying on the Drosera relay for secure, deterministic invocation.
+
+**Note (Bjorn):**
+
+* Replace placeholder `TARGET` and `WATCH` addresses before deployment.
+* Monitor **TARGET.balance** if intended; currently WATCH.balance is in the template.
 
 ---
 
@@ -22,25 +27,26 @@ The trap ensures **planner-safe execution**, **ABI alignment**, and **private tr
 
 1. **ABI Alignment**
 
-   * Removed 9th argument (`reason string`) from trap payload to match responder’s 8-argument signature.
-   * Ensures no decode mismatches or reverts during Drosera relay execution.
+   * Payload matches responder’s **exact 8-argument signature**.
+   * Removed extra `reason` argument to avoid decode mismatches.
 
 2. **Deterministic collect()**
 
-   * Removed `msg.sender` and `address(this)` from the snapshot.
-   * `TARGET` and `WATCH` are constants, producing consistent samples across operators.
+   * Snapshot uses only `TARGET` and `WATCH` constants.
+   * No `msg.sender` or `address(this)`.
 
 3. **Block Progression Check**
 
-   * Changed `<=` to `<` to detect **true block regressions** only.
+   * Detects **true block regressions** (`<`) instead of `<=`.
 
 4. **Planner-Safety Guard**
 
-   * Skips execution if there are fewer than 2 samples or if samples are empty.
+   * Skips execution if fewer than 2 samples or malformed samples.
 
 5. **Cleaner Payload Encoding**
 
-   * Encodes exactly 8 fields (target, watch, oldCode, newCode, oldBalance, newBalance, oldBlock, newBlock).
+   * Encodes exactly 8 fields:
+     `TARGET, WATCH, prevCode, curCode, prevBalance, curBalance, prevBlock, curBlock`
 
 ---
 
@@ -50,7 +56,7 @@ The trap ensures **planner-safe execution**, **ABI alignment**, and **private tr
 * Deterministic execution across all Drosera operators.
 * Private trap support with operator whitelist.
 * Generates precise payloads for responders, avoiding false positives.
-* Safe handling of empty or missing data.
+* Safe handling of empty or malformed data.
 
 ---
 
@@ -61,8 +67,8 @@ The trap ensures **planner-safe execution**, **ABI alignment**, and **private tr
 Implements `ITrap` interface:
 
 ```solidity
-function collect() external view returns (bytes)
-function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory)
+function collect() external view returns (bytes);
+function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory);
 ```
 
 **collect()**
@@ -72,7 +78,7 @@ function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes
 ```solidity
 bytes32 codeh;
 assembly { codeh := extcodehash(TARGET) }
-return abi.encode(codeh, WATCH.balance, block.number);
+return abi.encode(codeh, TARGET.balance, block.number);
 ```
 
 * Fully deterministic: no `msg.sender` or `address(this)`.
@@ -94,6 +100,8 @@ bytes memory payload = abi.encode(
     curBlock
 );
 ```
+
+* Includes **guard check** for malformed payloads (minimum 96 bytes per sample).
 
 ---
 
@@ -128,7 +136,7 @@ function respondWithEchoAlert(
 * Only emits events; **no imperative logic**.
 * ABI matches the trap payload exactly (8 arguments).
 
-**Deployed Address:** `0xBD8048d93efa26ef3f986f2fe1Eb74E2b7c5D5be`
+**Deployed Address:** `0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0`
 
 ---
 
@@ -141,7 +149,7 @@ ETH_RPC_URL=<your-eth-rpc>
 DROSERA_RPC_URL=<your-drosera-relay>
 PRIVATE_KEY=<your-private-key>
 
-RESPONSE_CONTRACT=<deployed responder address>
+RESPONSE_CONTRACT=0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0
 ```
 
 2. Compile and deploy:
@@ -153,7 +161,7 @@ forge script script/DeployAll.s.sol:DeployAll \
   --private-key $PRIVATE_KEY
 ```
 
-3. Record deployed addresses in `.env` and `drosera.toml`.
+3. Update `drosera.toml` with deployed addresses and payload config.
 
 ---
 
@@ -162,7 +170,7 @@ forge script script/DeployAll.s.sol:DeployAll \
 ```toml
 [traps.nymph_echo]
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
-response_contract = "0x311cc11b6eB48edf199aE23b73130397A50232dC"
+response_contract = "0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0"
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"
 cooldown_period_blocks = 20
 min_number_of_operators = 1
@@ -173,28 +181,16 @@ whitelist = ["0x14e424df0c35686cf58fc7d05860689041d300f6"]
 ```
 
 * `block_sample_size = 2` → compares newest vs previous sample only.
-* `private_trap = true` → restricts usage to your whitelist.
-* `whitelist` → list of Drosera operators allowed to execute the trap.
+* `private_trap = true` → restricts execution to your whitelist.
 
 ---
 
 ## **Best Practices**
 
-* Always use **checksummed addresses** for `TARGET` and `WATCH`.
-* Keep **trap/responder ABI aligned** to prevent reverts.
+* Use **checksummed addresses** for `TARGET` and `WATCH`.
+* Keep **trap/responder ABI aligned** to prevent decode errors.
 * Ensure **planner-safe checks** for empty or insufficient samples.
 * Update **payload fields** if the responder function changes.
-
----
-
-## **About**
-
-NymphEchoTrap is a **reference Drosera trap**, implementing best practices for stateless, deterministic monitoring.
-It reflects **Bjorn’s corrections** and is suitable for secure deployment, private traps, and reproducible anomaly detection.
-
----
-
-Perfect! I can add a **workflow diagram** using Markdown-friendly ASCII arrows so it’s fully viewable on GitHub. Here’s the updated README section with the diagram included:
 
 ---
 
@@ -245,12 +241,11 @@ Perfect! I can add a **workflow diagram** using Markdown-friendly ASCII arrows s
            +--------------------+
 ```
 
-**Explanation:**
+---
 
-1. **collect()**: Takes a deterministic snapshot of the `TARGET` and `WATCH` addresses (codehash, balance, block).
-2. **shouldRespond()**: Compares newest vs previous sample; triggers only if anomaly detected.
-3. **Payload**: Encodes exactly 8 fields to match the responder signature.
-4. **Drosera Relay**: Handles the call to the responder securely.
-5. **Responder**: Emits `EchoIncident` event to log the anomaly.
+## **About**
+
+NymphEchoTrap is a **reference Drosera trap**, implementing best practices for stateless, deterministic monitoring.
+It reflects **Bjorn’s corrections** and is suitable for secure deployment, private traps, and reproducible anomaly detection.
 
 ---
