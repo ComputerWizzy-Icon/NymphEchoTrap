@@ -5,35 +5,32 @@ import {ITrap} from "drosera-contracts/interfaces/ITrap.sol";
 
 /// @notice Drosera-compatible stateless trap.
 contract NymphEchoTrap is ITrap {
-    /// @dev Replace with the real addresses you want to monitor.
-    address public constant TARGET = 0x0000000000000000000000000000000000000000;
-    address public constant WATCH = 0x0000000000000000000000000000000000000000;
+    /// @dev Burner EOA used for deterministic testing
+    address public constant TARGET = 0x4B5525a09f287b5Af220c7BD982895FD821544fb;
 
-    struct Sample {
-        bytes32 codehash;
-        uint256 balance;
-        uint256 blockNumber;
-    }
+    address public constant WATCH = 0x4B5525a09f287b5Af220c7BD982895FD821544fb;
 
-    /// @notice Deterministic snapshot of TARGET.
+    /// @notice Deterministic snapshot of TARGET
     function collect() external view override returns (bytes memory) {
+        // Safety guard: never silently monitor zero address
+        if (TARGET == address(0)) return bytes("");
+
         bytes32 codeh;
         assembly {
             codeh := extcodehash(TARGET)
         }
 
-        // Bjorn correction: monitor TARGET.balance
         uint256 bal = TARGET.balance;
         uint256 blk = block.number;
 
         return abi.encode(codeh, bal, blk);
     }
 
-    /// @notice Compare newest sample vs previous sample.
+    /// @notice Compare newest sample vs previous sample
     function shouldRespond(
         bytes[] calldata data
     ) external pure override returns (bool, bytes memory) {
-        // Bjorn: strict 96-byte guard
+        // Bjorn-required 96-byte shape guard
         if (data.length < 2 || data[0].length < 96 || data[1].length < 96) {
             return (false, "");
         }
@@ -55,7 +52,6 @@ contract NymphEchoTrap is ITrap {
             return (false, "");
         }
 
-        // Bjorn: exact 8-field payload
         bytes memory payload = abi.encode(
             TARGET,
             WATCH,
