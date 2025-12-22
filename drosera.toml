@@ -1,5 +1,5 @@
 ethereum_rpc = "https://ethereum-hoodi-rpc.publicnode.com"
-drosera_rpc = "https://relay.hoodi.drosera.io"
+drosera_rpc  = "https://relay.hoodi.drosera.io"
 eth_chain_id = 560048
 drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 
@@ -9,10 +9,9 @@ drosera_address = "0x91cB447BaFc6e0EA0F4Fe056F5a9b1F14bb06e5D"
 # Compiled artifact of the trap
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
 
-# MUST be your newly deployed responder
-# From your deploy logs:
-# Responder deployed at: 0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0
-response_contract = "0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0"
+# MUST be the latest deployed responder
+# Responder deployed at block 1879666
+response_contract = "0xC2D52BF67A5616e3E736AC3912FC0fF9f0D5d463"
 
 # MUST match responder signature EXACTLY (8 args)
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"
@@ -23,10 +22,10 @@ min_number_of_operators = 1
 max_number_of_operators = 3
 block_sample_size = 2
 
-# Hidden trap (only you can run it)
+# Private trap
 private_trap = true
 
-# Off-chain whitelist used by Drosera
+# Off-chain operator whitelist
 whitelist = [
-    "0x14e424df0c35686cf58fc7d05860689041d300f6"
+  "0x14e424df0c35686cf58fc7d05860689041d300f6"
 ]
