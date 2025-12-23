@@ -11,7 +11,7 @@ path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
 
 # MUST be the latest deployed responder
 # Responder deployed at block 1879666
-response_contract = "0xC2D52BF67A5616e3E736AC3912FC0fF9f0D5d463"
+response_contract = "0xaddC277b2A4511bCb86a479207C0E335AD5BFEbd"
 
 # MUST match responder signature EXACTLY (8 args)
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"

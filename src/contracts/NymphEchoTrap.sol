@@ -5,15 +5,14 @@ import {ITrap} from "drosera-contracts/interfaces/ITrap.sol";
 
 /// @notice Drosera-compatible stateless trap.
 contract NymphEchoTrap is ITrap {
-    /// @dev Burner EOA used for deterministic testing
+    /// @dev Burner EOA used for deterministic testing; replace with contract for real anomaly detection
     address public constant TARGET = 0x4B5525a09f287b5Af220c7BD982895FD821544fb;
-
     address public constant WATCH = 0x4B5525a09f287b5Af220c7BD982895FD821544fb;
 
     /// @notice Deterministic snapshot of TARGET
     function collect() external view override returns (bytes memory) {
-        // Safety guard: never silently monitor zero address
-        if (TARGET == address(0)) return bytes("");
+        // Safety guard: never silently monitor zero addresses
+        if (TARGET == address(0) || WATCH == address(0)) return bytes("");
 
         bytes32 codeh;
         assembly {
@@ -30,9 +29,9 @@ contract NymphEchoTrap is ITrap {
     function shouldRespond(
         bytes[] calldata data
     ) external pure override returns (bool, bytes memory) {
-        // Bjorn-required 96-byte shape guard
+        // 96-byte strict guard required by Drosera
         if (data.length < 2 || data[0].length < 96 || data[1].length < 96) {
-            return (false, "");
+            return (false, bytes(""));
         }
 
         (bytes32 curCode, uint256 curBal, uint256 curBlk) = abi.decode(
@@ -49,7 +48,7 @@ contract NymphEchoTrap is ITrap {
         bool blockJump = (curBlk < prevBlk);
 
         if (!(codeChanged || balanceChanged || blockJump)) {
-            return (false, "");
+            return (false, bytes(""));
         }
 
         bytes memory payload = abi.encode(

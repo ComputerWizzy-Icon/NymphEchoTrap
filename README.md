@@ -1,8 +1,8 @@
 # **NymphEchoTrap**
 
-**Status:** Drosera-compatible stateless trap
-**Author:** Sekani chief JayCool BFF
-**Version:** 1.2 (Bjorn-reviewed & corrected)
+**Status:** Drosera-compatible stateless trap  
+**Author:** Sekani chief JayCool BFF  
+**Version:** 1.3 (Bjorn-reviewed & deploy-ready)
 
 ---
 
@@ -18,33 +18,29 @@ The trap ensures **planner-safe execution**, **ABI alignment**, and **private tr
 
 **Note (Bjorn):**
 
-* Replace placeholder `TARGET` and `WATCH` addresses before deployment.
-* Monitor **TARGET.balance** if intended; currently WATCH.balance is in the template.
+* Replace `TARGET` and `WATCH` with **contract addresses** for production.
+* `WATCH` currently serves as a **context/observer address** in the payload.
 
 ---
 
 ## **Key Improvements (Bjorn Review)**
 
 1. **ABI Alignment**
-
    * Payload matches responder’s **exact 8-argument signature**.
    * Removed extra `reason` argument to avoid decode mismatches.
 
 2. **Deterministic collect()**
-
    * Snapshot uses only `TARGET` and `WATCH` constants.
    * No `msg.sender` or `address(this)`.
 
 3. **Block Progression Check**
-
    * Detects **true block regressions** (`<`) instead of `<=`.
 
 4. **Planner-Safety Guard**
-
    * Skips execution if fewer than 2 samples or malformed samples.
+   * Early guard prevents execution if `TARGET` or `WATCH` is `0x0`.
 
 5. **Cleaner Payload Encoding**
-
    * Encodes exactly 8 fields:
      `TARGET, WATCH, prevCode, curCode, prevBalance, curBalance, prevBlock, curBlock`
 
@@ -69,16 +65,22 @@ Implements `ITrap` interface:
 ```solidity
 function collect() external view returns (bytes);
 function shouldRespond(bytes[] calldata data) external pure returns (bool, bytes memory);
-```
+````
 
 **collect()**
 
 * Takes a snapshot of `TARGET` and `WATCH`:
 
 ```solidity
+// Early safety guard
+if (TARGET == address(0) || WATCH == address(0)) return bytes("");
+
 bytes32 codeh;
 assembly { codeh := extcodehash(TARGET) }
-return abi.encode(codeh, TARGET.balance, block.number);
+uint256 bal = TARGET.balance;
+uint256 blk = block.number;
+
+return abi.encode(codeh, bal, blk);
 ```
 
 * Fully deterministic: no `msg.sender` or `address(this)`.
@@ -101,7 +103,13 @@ bytes memory payload = abi.encode(
 );
 ```
 
-* Includes **guard check** for malformed payloads (minimum 96 bytes per sample).
+* Includes **guard check** for malformed payloads (minimum 96 bytes per sample):
+
+```solidity
+if (data.length < 2 || data[0].length < 96 || data[1].length < 96) {
+    return (false, bytes(""));
+}
+```
 
 ---
 
@@ -136,7 +144,8 @@ function respondWithEchoAlert(
 * Only emits events; **no imperative logic**.
 * ABI matches the trap payload exactly (8 arguments).
 
-**Deployed Address:** `0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0`
+**Deployed Responder Address:** `0xaddC277b2A4511bCb86a479207C0E335AD5BFEbd`
+**Deployed Trap Address:** `0x7cDcf1C4f4bfe5976f03317E51Be52530cB22983`
 
 ---
 
@@ -149,7 +158,7 @@ ETH_RPC_URL=<your-eth-rpc>
 DROSERA_RPC_URL=<your-drosera-relay>
 PRIVATE_KEY=<your-private-key>
 
-RESPONSE_CONTRACT=0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0
+RESPONSE_CONTRACT=0xaddC277b2A4511bCb86a479207C0E335AD5BFEbd
 ```
 
 2. Compile and deploy:
@@ -170,7 +179,7 @@ forge script script/DeployAll.s.sol:DeployAll \
 ```toml
 [traps.nymph_echo]
 path = "out/NymphEchoTrap.sol/NymphEchoTrap.json"
-response_contract = "0x44a481Ec90bB56B2604A1ca73822D9eCE12D8aa0"
+response_contract = "0xaddC277b2A4511bCb86a479207C0E335AD5BFEbd"
 response_function = "respondWithEchoAlert(address,address,bytes32,bytes32,uint256,uint256,uint256,uint256)"
 cooldown_period_blocks = 20
 min_number_of_operators = 1
@@ -191,6 +200,7 @@ whitelist = ["0x14e424df0c35686cf58fc7d05860689041d300f6"]
 * Keep **trap/responder ABI aligned** to prevent decode errors.
 * Ensure **planner-safe checks** for empty or insufficient samples.
 * Update **payload fields** if the responder function changes.
+* Use **contract addresses** for TARGET in production (not EOAs) to detect code changes.
 
 ---
 
@@ -245,7 +255,7 @@ whitelist = ["0x14e424df0c35686cf58fc7d05860689041d300f6"]
 
 ## **About**
 
-NymphEchoTrap is a **reference Drosera trap**, implementing best practices for stateless, deterministic monitoring.
-It reflects **Bjorn’s corrections** and is suitable for secure deployment, private traps, and reproducible anomaly detection.
+`NymphEchoTrap` is a **reference Drosera trap**, implementing best practices for stateless, deterministic monitoring.
+It reflects **Bjorn’s corrections** and is suitable for **secure deployment**, **private traps**, and reproducible **anomaly detection**.
 
----
+```
